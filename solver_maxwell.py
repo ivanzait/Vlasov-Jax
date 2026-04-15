@@ -5,11 +5,10 @@ Implements the SLICE-3D semi-Lagrangian scheme for V X B rotations and non-spect
 import jax
 import jax.numpy as jnp
 from jax import jit
+from jax.scipy.ndimage import map_coordinates
 from functools import partial
 
-# Constants
-q_i = 1.0   # Ion charge
-m_i = 1.0   # Ion mass
+
 
 @partial(jit, static_argnums=(3, 4))
 def remap_1d_axis0(f, disp, dx, bc_left='periodic', bc_right='periodic'):
@@ -19,24 +18,15 @@ def remap_1d_axis0(f, disp, dx, bc_left='periodic', bc_right='periodic'):
     disp is the shift array matching the shape of f.
     """
     n = f.shape[0]
+    # Build full coordinate mesh; shift only axis 0 by the semi-Lagrangian displacement.
     coords = jnp.indices(f.shape, dtype=jnp.float32)
-    
-    # Calculate source indices
-    src_idx_0 = coords[0] - disp / dx
+    src_coords = coords.at[0].set(coords[0] - disp / dx)
     
     if bc_left == 'periodic':
-        # Assume both are periodic if left is periodic
-        src_idx_0 = jnp.mod(src_idx_0, n)
         mode = 'wrap'
     else: 
-        # map_coordinates with mode='nearest' handles values outside [0, n-1]
-        # by clamping to the nearest edge index. Correct for 'copy' and 'static'.
         mode = 'nearest'
     
-    # Overwrite the 0th axis coordinates
-    src_coords = coords.at[0].set(src_idx_0)
-    
-    from jax.scipy.ndimage import map_coordinates
     return map_coordinates(f, src_coords, order=1, mode=mode)
 
 
@@ -93,13 +83,20 @@ class HybridMaxwellSolver:
 
 
     def set_static_boundaries(self, f, B_y, B_z):
-        """ Capture initial state for static inflow/outflow enforcement """
-        self.f_left_static = f[0]
-        self.f_right_static = f[-1]
-        self.By_left_static = B_y[0]
-        self.By_right_static = B_y[-1]
-        self.Bz_left_static = B_z[0]
-        self.Bz_right_static = B_z[-1]
+        """
+        Capture initial state for static inflow/outflow enforcement.
+        Uses a 2-cell buffer (indices [0:2] / [-2:]) to suppress the
+        artificial density notch that forms between a single frozen ghost
+        cell and the first free interior cell.
+        """
+        # Left buffer: cells 0 and 1
+        self.f_left_static  = f[0:2]     # shape (2, nv, nv, nv)
+        self.By_left_static = B_y[0:2]   # shape (2,)
+        self.Bz_left_static = B_z[0:2]   # shape (2,)
+        # Right buffer: cells -2 and -1
+        self.f_right_static  = f[-2:]    # shape (2, nv, nv, nv)
+        self.By_right_static = B_y[-2:]  # shape (2,)
+        self.Bz_right_static = B_z[-2:]  # shape (2,)
         
 
 
@@ -194,7 +191,7 @@ class HybridMaxwellSolver:
         vy_grid = self.v[None, None, :, None]
         vz_grid = self.v[None, None, None, :]
         
-        # The forces calculated on Eulerian grids: a = q/m (E + V x B). (with q/m = 1)
+        # q/m = 1 in normalized units (see initialize_maxwell.py normalization header)
         ax = Ex_4d + (vy_grid * Bz_4d - vz_grid * By_4d)
         ay = Ey_4d + (vz_grid * Bx_4d - vx_grid * Bz_4d)
         az = Ez_4d + (vx_grid * By_4d - vy_grid * Bx_4d)
@@ -226,7 +223,8 @@ class HybridMaxwellSolver:
     def apply_bc(self, f, B_y, B_z):
         """
         Explicitly enforces boundary conditions on the fields and distribution function.
-        Handles separate left/right spatial boundaries and fixed 'static' values.
+        Static BCs use a 2-cell buffer so the CNN (kernel_size=3) never sees an
+        artificial step between the frozen ghost zone and the free interior.
         """
         # 1. Left Boundary (-x)
         if self.bc_x[0] == 'copy':
@@ -234,9 +232,11 @@ class HybridMaxwellSolver:
             B_z = B_z.at[0].set(B_z[1])
             f = f.at[0].set(f[1])
         elif self.bc_x[0] == 'static' and self.f_left_static is not None:
-            B_y = B_y.at[0].set(self.By_left_static)
-            B_z = B_z.at[0].set(self.Bz_left_static)
-            f = f.at[0].set(self.f_left_static)
+            # 2-cell buffer: clamp cells 0 and 1 to their initial inflow state
+            B_y = B_y.at[0:2].set(self.By_left_static)
+            B_z = B_z.at[0:2].set(self.Bz_left_static)
+            f = f.at[0].set(self.f_left_static[0])
+            f = f.at[1].set(self.f_left_static[1])
 
         # 2. Right Boundary (+x)
         if self.bc_x[1] == 'copy':
@@ -244,33 +244,93 @@ class HybridMaxwellSolver:
             B_z = B_z.at[-1].set(B_z[-2])
             f = f.at[-1].set(f[-2])
         elif self.bc_x[1] == 'static' and self.f_right_static is not None:
-            B_y = B_y.at[-1].set(self.By_right_static)
-            B_z = B_z.at[-1].set(self.Bz_right_static)
-            f = f.at[-1].set(self.f_right_static)
+            # 2-cell buffer: clamp cells -2 and -1 to their initial downstream state
+            B_y = B_y.at[-2:].set(self.By_right_static)
+            B_z = B_z.at[-2:].set(self.Bz_right_static)
+            f = f.at[-1].set(self.f_right_static[-1])
+            f = f.at[-2].set(self.f_right_static[-2])
             
         return f, B_y, B_z
 
 
 
-    @partial(jit, static_argnums=(0,))
-    def strang_step(self, f, B_x, B_y, B_z, dt):
+    @partial(jit, static_argnums=(0, 7, 8, 9, 10, 11, 12))
+    def strang_step(self, f, B_x, B_y, B_z, dt, 
+                    ml_params=None, adv_func=None, acc_func=None, adv_flux=False,
+                    adv_clamp=1e-2, acc_clamp=1e-2, boundary_buffer=0):
         """ 
-        Full Hybrid Maxwell Strang Split Step. 
+        Full Hybrid Maxwell Strang Split Step with optional Machine Learning corrections. 
         Advc X (dt/2) -> Calc Fields -> Accel V (dt) -> Advc B (dt) -> Advc X (dt/2) 
         """
-        # Half Advect X
+        # 1. Half Advect X + ML Correction
         f = self.advect_x_slice3d(f, dt=dt/2)
+        if adv_func and ml_params:
+            if adv_flux:
+                # adv_flux: adv_func returns face log-multiplier g_face (shape like f)
+                g_face_log = adv_func(f, ml_params['adv'], log_clamp=adv_clamp,
+                                      boundary_buffer=boundary_buffer)
+                # Upwind face fluxes: use left cell when vx>0 else right cell
+                vx_grid = self.v[None, :, None, None]
+                f_right = jnp.roll(f, -1, axis=0)
+                f_face_upwind = jnp.where(vx_grid > 0, f, f_right)
+                flux_face_base = vx_grid * f_face_upwind
+                flux_face_corr = flux_face_base * jnp.exp(g_face_log)
+                f_after = f - (dt / 2 / self.dx) * (flux_face_corr - jnp.roll(flux_face_corr, 1, axis=0))
+                # Conservative non-negativity limiter: project negatives to zero
+                # then rescale positives to preserve total mass
+                eps = 1e-18
+                M0 = jnp.sum(f)
+                f_pos = jnp.maximum(f_after, eps)
+                M_pos = jnp.sum(f_pos)
+                scale = jnp.where(M_pos > 0, M0 / M_pos, 1.0)
+                f = f_pos * scale
+            else:
+                g_log = adv_func(f, ml_params['adv'], log_clamp=adv_clamp, 
+                                 boundary_buffer=boundary_buffer)
+                f = f * jnp.exp(g_log)
+            f, B_y, B_z = self.apply_bc(f, B_y, B_z)
         
-        # Calculate Electric Fields via Ohm's Law
+        # 2. Calculate Electric Fields via Ohm's Law
         E_x, E_y, E_z, J_x, J_y, J_z = self.get_fields(f, B_x, B_y, B_z)
         
-        # Accelerate V (Full Step)
+        # 3. Accelerate V (Full Step) + ML Correction
         f = self.accelerate_v_slice3d(f, E_x, E_y, E_z, B_x, B_y, B_z, dt=dt)
+        if acc_func and ml_params:
+            g_log = acc_func(f, E_x, E_y, E_z, B_x, B_y, B_z, dt, ml_params['acc'],
+                             log_clamp=acc_clamp, boundary_buffer=boundary_buffer)
+            f = f * jnp.exp(g_log)
+            f, B_y, B_z = self.apply_bc(f, B_y, B_z)
+            
+            # [Physics Consistency] Recalculate fields after ML correction 
+            # to ensure Faraday's Law (Adv B) uses corrected ion moments.
+            E_x, E_y, E_z, _, _, _ = self.get_fields(f, B_x, B_y, B_z)
         
-        # Advance Magnetic Field (Faraday)
+        # 4. Advance Magnetic Field (Faraday)
         B_x, B_y, B_z = self.advance_magnetic_field(B_x, B_y, B_z, E_y, E_z, dt=dt)
         
-        # Half Advect X
+        # 5. Half Advect X + ML Correction
         f = self.advect_x_slice3d(f, dt=dt/2)
+        if adv_func and ml_params:
+            if adv_flux:
+                g_face_log = adv_func(f, ml_params['adv'], log_clamp=adv_clamp,
+                                      boundary_buffer=boundary_buffer)
+                vx_grid = self.v[None, :, None, None]
+                f_right = jnp.roll(f, -1, axis=0)
+                f_face_upwind = jnp.where(vx_grid > 0, f, f_right)
+                flux_face_base = vx_grid * f_face_upwind
+                flux_face_corr = flux_face_base * jnp.exp(g_face_log)
+                f_after = f - (dt / 2 / self.dx) * (flux_face_corr - jnp.roll(flux_face_corr, 1, axis=0))
+                # Conservative non-negativity limiter
+                eps = 1e-18
+                M0 = jnp.sum(f)
+                f_pos = jnp.maximum(f_after, eps)
+                M_pos = jnp.sum(f_pos)
+                scale = jnp.where(M_pos > 0, M0 / M_pos, 1.0)
+                f = f_pos * scale
+            else:
+                g_log = adv_func(f, ml_params['adv'], log_clamp=adv_clamp, 
+                                 boundary_buffer=boundary_buffer)
+                f = f * jnp.exp(g_log)
+            f, B_y, B_z = self.apply_bc(f, B_y, B_z)
         
         return f, B_x, B_y, B_z, E_x, E_y, E_z

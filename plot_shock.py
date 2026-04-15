@@ -1,5 +1,8 @@
 import matplotlib.pyplot as plt
 import jax.numpy as jnp
+import os
+import glob
+from data_io import load_snapshot
 
 
 
@@ -111,3 +114,56 @@ def plot_initial_verification(x, n, T, P_gas, P_mag, P_tot, save_dir="plots_maxw
     plt.savefig(f"{save_dir}/initial_verification.png", dpi=150)
     plt.close(fig)
     print(f"Verification plot saved to {save_dir}/initial_verification.png")
+
+
+import config
+
+if __name__ == "__main__":
+    # --- Configuration ---
+    snapshot_dir = config.SAVE_DIR
+    output_base_dir = config.PLOT_DIR
+    
+    # 1. Setup output directory
+    os.makedirs(output_base_dir, exist_ok=True)
+    
+    # 2. Find snapshots
+    snapshot_pattern = os.path.join(snapshot_dir, "snapshot_*.npz")
+    snapshot_files = sorted(glob.glob(snapshot_pattern))
+    
+    if not snapshot_files:
+        print(f" [!] No snapshots found in {snapshot_dir}. Ensure simulation has run.")
+    else:
+        print(f" [Plotter] Found {len(snapshot_files)} snapshots. Starting batch processing...")
+        
+        # 3. Processing Loop
+        for i, file_path in enumerate(snapshot_files):
+            print(f"   --> Processing {os.path.basename(file_path)} ({i+1}/{len(snapshot_files)})")
+            
+            data = load_snapshot(file_path)
+            step = data['step']
+            f = data['f']
+            B_x, B_y, B_z = data['B']
+            E_x, E_y, E_z = data['E']
+            
+            # --- Dynamic Grid Resolution ---
+            # Prioritize snapshot metadata, fallback to config
+            meta = data.get('metadata', {})
+            nx = int(meta.get('nx', f.shape[0]))
+            nv = int(meta.get('nv', f.shape[1]))
+            dx = float(meta.get('dx', config.DX))
+            dv = float(meta.get('dv', config.DV))
+            lx = float(meta.get('lx', dx * nx))
+            lv = float(meta.get('lv', dv * nv / 2))
+            
+            x = jnp.linspace(0, lx, nx, endpoint=False)
+            v = jnp.linspace(-lv, lv, nv)
+            
+            plot_step_maxwell(
+                step, x, v, f, 
+                B_x, B_y, B_z, 
+                E_x, E_y, E_z, 
+                lx, dx, dv, 
+                save_dir=output_base_dir
+            )
+
+        print(f"\n [Done] All plots saved to {output_base_dir}/")

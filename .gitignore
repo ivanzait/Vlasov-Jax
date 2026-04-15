@@ -1,4 +1,5 @@
 # ignore folders
 venv/
-plots_maxwell/
-__pycache__
+data/
+plots/
+__pycache__/
