@@ -13,10 +13,10 @@
 ## 🚀 Key Features
 
 *   **Multi-Regime Physics**: Specialized modules for **Hybrid** (Ion kinetics) and **Electrostatic** (Electron kinetics).
+*   **Modern Architecture**: Uses JAX-native **Pytree** state management for end-to-end differentiability.
 *   **Numerical Precision**:
     *   **SLICE-3D**: Semi-Lagrangian scheme for conservative velocity rotations.
-    *   **TVD Advection**: 2nd-order Flux-Limited schemes for sharp shock capturing.
-*   **Darwin Approximation**: Uses the Darwin Hybrid model to efficiently simulate low-frequency electromagnetic phenomena (Alfvénic scales) by neglecting the displacement current.
+    *   **Ghost-Cell Boundaries**: 2nd-order Central differences enforced through synchronized 2-cell padding.
 *   **Differentiable by Design**: Fully compatible with `jax.grad`, `jax.vmap`, and `jax.jit`.
 
 ---
@@ -26,59 +26,44 @@
 The codebase is modularized to decouple physics logic from numerical infrastructure:
 
 ### 1. Hybrid Vlasov-Maxwell Solver
-Focused on ion-scale electromagnetic problems like shocks and instabilities.
-*   [`run_maxwell.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX/run_maxwell.py): Main entry point for simulations.
-*   [`initialize_maxwell.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX/initialize_maxwell.py): Centralized setup for physical parameters and grid verification.
-*   [`solver_maxwell.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX/solver_maxwell.py): Implementation of the Darwin solver and Ohm's law.
-*   [`setup_shock.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX/setup_shock.py): Initial Condition generator using Rankine-Hugoniot relations.
-
-### 2. Electrostatic Vlasov-Poisson Solver
-Located in [`vlasov-poisson/`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX/vlasov-poisson/), optimized for high-frequency electron dynamics.
-
-### 3. Analytics & Diagnostics
-*   `plasma_calculator.ipynb`: Jupyter notebook for deriving normalized physical parameters.
-*   `plot_shock.py`: High-fidelity visualization toolkit.
+*   [`simulator.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/simulator.py): Main entry point for simulations.
+*   [`init_simulation.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/init_simulation.py): Centralized setup for physical parameters and grid verification.
+*   [`vlasov_solver.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/vlasov_solver.py): Implementation of the high-level Strang-split orchestrator.
+*   [`field_solver.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/field_solver.py): Functional Maxwell/Faraday/Moment kernels.
+*   [`boundary.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/boundary.py): Ghost cell synchronization and BC enforcement.
+*   [`state.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/state.py): Core JAX Pytree data structure (`SimulationState`).
+*   [`init_shock.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/init_shock.py): Initial Condition generator for shock physics.
 
 ---
 
 ## 🔄 Simulation Cycle (Darwin Hybrid)
 
-VLSV-JAX uses a **Strang-Splitting** sequence to maintain 2nd-order accuracy in time while decoupling spatial advection, field updates, and velocity acceleration.
+VLSV-JAX uses a **Strang-Splitting** sequence to maintain 2nd-order accuracy in time:
 
 ```mermaid
 graph TD
     A[Start Step t] --> B["Advect X (dt/2)"]
-    B --> C["Calculate Fields (E, J) via Ohm's Law"]
-    C --> D["Accelerate V (dt) via Lorentz Force"]
-    D --> E["Advance Magnetic Field (dt) via Faraday's Law"]
+    B --> C["Calculate Fields (E, J) via field_solver"]
+    C --> D["Accelerate V (dt) via vlasov_solver"]
+    D --> E["Advance Magnetic Field (dt) via field_solver"]
     E --> F["Advect X (dt/2)"]
-    F --> G["End Step t+dt"]
-    G --> A
+    F --> G["Synchronize Ghosts (apply_bc)"]
+    G --> H["End Step t+dt"]
+    H --> A
 ```
 
 ---
 
-## ⚠️ Numerical Stability & Grid Resolution
+## 📊 Data Format & Persistence
 
-Recent benchmarks have shown that the solver's initial equilibrium is highly sensitive to the velocity grid spacing ($dv$).
+Simulation data is stored in **`.npz`** format for broad compatibility. Each file contains:
+*   **`f`**: 4D Distribution Function $[NX_{total}, NV, NV, NV]$.
+*   **`B_x, B_y, B_z`**: 1D Magnetic field components.
+*   **`E_x, E_y, E_z`**: 1D Electric field components.
+*   **`x, v`**: Physical grid coordinates.
 
-> [!IMPORTANT]
-> **Velocity Resolution ($dv$) vs. Spatial Resolution ($dx$)**
-> *   **$dx$ Sensitivity**: Variations of $dx$ by a factor of 2 result in minimal (~0.01%) changes in initial pressure balance.
-> *   **$dv$ Sensitivity**: The accuracy of moment integration ($n, T$) depends exponentially on $dv$ relative to the thermal velocity ($v_{th}$). Increasing $dv$ can lead to **order-of-magnitude growth** in pressure variation.
-
-**Best Practice**: Ensure $dv < 0.5 \cdot v_{th}$ in all regions of the simulation. The `initialize_simulation` function now includes an automated check and warning for this condition.
-
----
-
-## 📏 Normalization Scales
-
-| Parameter | Hybrid Solver (Alfvenic) | Electrostatic Solver (Debye) |
-| :--- | :--- | :--- |
-| **Length** | Ion Skin Depth $d_i = c / \omega_{pi}$ | Debye Length $\lambda_D$ |
-| **Time** | Inv. Ion Cyclotron $\Omega_{ci}^{-1}$ | Inv. Plasma Freq. $\omega_{pe}^{-1}$ |
-| **Velocity** | Alfvén Velocity $v_A$ | Electron Thermal Velocity $v_{te}$ |
-| **B-Field** | Background Field $B_0$ | Externally scaled |
+> [!NOTE]
+> Saved data strictly contains only the **physical domain** (ghost cells are automatically sliced out during persistence).
 
 ---
 
@@ -86,12 +71,11 @@ Recent benchmarks have shown that the solver's initial equilibrium is highly sen
 
 ### Running a Hybrid Shock Simulation
 ```bash
-python run_maxwell.py
+python3 simulator.py --config config_coarse
 ```
-*Outputs (plots, diagnostics) are saved to `plots_maxwell/`.*
+*Outputs (plots, diagnostics) are saved to the directories defined in your config.*
 
-### Running an Electrostatic Two-Stream Simulation
-```bash
-cd vlasov-poisson
-python run_poisson.py
-```
+---
+
+## 🌍 Roadmap
+See [taskboard.md](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/taskboard.md) for current milestones and ML integration progress.

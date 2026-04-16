@@ -7,8 +7,8 @@ NX = 64
 DX = 0.5 
 
 # Velocity Grid (Vx, Vy, Vz)
-NV = 32
-DV = 1.0
+NV = 64
+DV = 0.5
 
 # --- Simulation Timing ---
 NT = 100
@@ -25,9 +25,9 @@ BC_X = ('copy', 'static')
 BC_V = 'copy'
 
 # --- Visualization ---
-PLOT_DIR = "plots/plots_coarse"
+PLOT_DIR = "plots/plots_fine"
 PLOT_EVERY = 10
 
 # --- Data Persistence ---
-DATA_DIR = "data/coarse"
+DATA_DIR = "data/fine"
 SAVE_STRIDE = 2

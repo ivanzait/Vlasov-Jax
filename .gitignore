@@ -2,4 +2,5 @@
 venv/
 plots/
 data/
+ml_weights/
 __pycache__
