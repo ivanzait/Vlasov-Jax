@@ -1,4 +1,4 @@
-from initialize_maxwell import initialize_simulation
+from init_simulation import initialize_simulation
 import jax.numpy as jnp
 
 print("--- TESTING DV DEPENDENCE ---")

@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import jax.numpy as jnp
-
+import os
+import argparse
 
 
 def plot_step_maxwell(i, x, v, f, B_x, B_y, B_z, E_x, E_y, E_z, lx, dx, dv, save_dir="plots_maxwell"):
@@ -65,7 +66,6 @@ def plot_step_maxwell(i, x, v, f, B_x, B_y, B_z, E_x, E_y, E_z, lx, dx, dv, save
     axes[3].set_title("Marginal Phase Space f(x, vx)")
     axes[3].set_xlabel("x (d_i)")
     axes[3].set_ylabel("vx (V_A)")
-    #fig.colorbar(im, ax=axes[3])
     
     plt.tight_layout()
     plt.savefig(f"{save_dir}/step_{i:04d}.png", dpi=150)
@@ -108,6 +108,40 @@ def plot_initial_verification(x, n, T, P_gas, P_mag, P_tot, save_dir="plots_maxw
     axes[2].grid(True)
     
     plt.tight_layout()
+    os.makedirs(save_dir, exist_ok=True)
     plt.savefig(f"{save_dir}/initial_verification.png", dpi=150)
     plt.close(fig)
     print(f"Verification plot saved to {save_dir}/initial_verification.png")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Plot simulation results from .npz files.")
+    parser.add_argument("--data_dir", type=str, default="data/test", help="Directory containing .npz files.")
+    parser.add_argument("--step", type=int, default=0, help="Timestep to plot.")
+    parser.add_argument("--out_dir", type=str, default="plots_maxwell", help="Directory to save the plots.")
+    
+    args = parser.parse_args()
+    
+    file_path = os.path.join(args.data_dir, f"step_{args.step:04d}.npz")
+    if not os.path.exists(file_path):
+        print(f"Error: File not found: {file_path}")
+    else:
+        print(f"Loading data from {file_path}...")
+        data = jnp.load(file_path)
+        
+        # Unpack data
+        f = data['f']
+        B_x, B_y, B_z = data['B_x'], data['B_y'], data['B_z']
+        E_x, E_y, E_z = data['E_x'], data['E_y'], data['E_z']
+        x, v = data['x'], data['v']
+        dx, dv = data['dx'], data['dv']
+        
+        # Reconstruct lx
+        lx = float(x[-1] + dx)
+        
+        # Ensure output directory exists
+        os.makedirs(args.out_dir, exist_ok=True)
+        
+        print(f"Plotting step {args.step}...")
+        plot_step_maxwell(args.step, x, v, f, B_x, B_y, B_z, E_x, E_y, E_z, lx, dx, dv, save_dir=args.out_dir)
+        print(f"Plot saved to {args.out_dir}/step_{args.step:04d}.png")

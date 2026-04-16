@@ -18,52 +18,51 @@ shock_dict_normalized = {
 
 def setup_shock_hybrid(X, VX, VY, VZ, lx, x_1d, params=shock_dict_normalized):
     """
-    Initial condition for a Hybrid Shock Tube maintaining mechanical equilibrium.
-    Satisfies n(x)T(x) + B(x)^2/2 = Constant.
+    Initial condition for a Hybrid Shock Tube.
+    Flow direction: Right -> Left (Vx < 0).
+    Upstream (Entrance): Right side (x=L).
+    Downstream (Exit): Left side (x=0).
     """
     n_up, n_down = params['n_up'], params['n_down']
     B_up, B_down = params['B_up'], params['B_down']
     V_up, V_down = params['V_up'], params['V_down']
     T_up, T_down = params['T_up'], params['T_down']
 
-    # 1. Coordinate & Smoothing setup
-    width = 1.0 
-    step1 = 0.5 * (1.0 + jnp.tanh((x_1d -  3 * lx / 4) / width))
-    S = step1
-    S_3d = 0.5 * (1.0 + jnp.tanh((X - 3 * lx / 4) / width)) 
-    #step2 = 0.5 * (1.0 - jnp.tanh((x_1d - 3 * lx / 4) / width))
-    #S = step1 * step2 
-    #S_3d = 0.5 * (1.0 + jnp.tanh((X - lx / 4) / width)) * 0.5 * (1.0 - jnp.tanh((X - 3 * lx / 4) / width))
+    # 1. Coordinate & smoothing setup
+    # S=0 at x=0 (Left), S=1 at x=L (Right)
+    width = 2.0 
+    shock_pos = 2 * lx / 4
+    S = 0.5 * (1.0 + jnp.tanh((x_1d - shock_pos) / width))
+    S_3d = 0.5 * (1.0 + jnp.tanh((X - shock_pos) / width)) 
 
-    # 2. Field & Density Profiles
-    n_1d = n_up + (n_down - n_up) * S
+    # 2. Field & Density Profiles (S=1 -> Upstream)
+    n_1d = n_down + (n_up - n_down) * S
     B_x_1d = jnp.ones_like(x_1d) * B_up[0]
-    B_y_1d = B_up[1] + (B_down[1] - B_up[1]) * S
-    B_z_1d = B_up[2] + (B_down[2] - B_up[2]) * S
+    B_y_1d = B_down[1] + (B_up[1] - B_down[1]) * S
+    B_z_1d = B_down[2] + (B_up[2] - B_down[2]) * S
     
-    # Define Total Pressure based on the maximum required to keep both sides positive
+    # Equilibrium Pressure
     P_up = n_up * T_up + jnp.sum(B_up**2) / 2.0
     P_down = n_down * T_down + jnp.sum(B_down**2) / 2.0
     P_tot = jnp.maximum(P_up, P_down)
     
     # 3. 3D Moment Fields
-    n_3d = n_up + (n_down - n_up) * S_3d
-    V_x_3d = V_up[0] + (V_down[0] - V_up[0]) * S_3d
-    V_y_3d = V_up[1] + (V_down[1] - V_up[1]) * S_3d
-    V_z_3d = V_up[2] + (V_down[2] - V_up[2]) * S_3d
+    n_3d = n_down + (n_up - n_down) * S_3d
+    V_x_3d = V_down[0] + (V_up[0] - V_down[0]) * S_3d
+    V_y_3d = V_down[1] + (V_up[1] - V_down[1]) * S_3d
+    V_z_3d = V_down[2] + (V_up[2] - V_down[2]) * S_3d
     
-    # Compute local B^2 on 3D grid
-    By_3d = B_up[1] + (B_down[1] - B_up[1]) * S_3d
-    Bz_3d = B_up[2] + (B_down[2] - B_up[2]) * S_3d
+    # Local B field for pressure balance
+    By_3d = B_down[1] + (B_up[1] - B_down[1]) * S_3d
+    Bz_3d = B_down[2] + (B_up[2] - B_down[2]) * S_3d
     B_sq_3d = B_up[0]**2 + By_3d**2 + Bz_3d**2
     
-    # Calculate local Temperature T(x) = (P_tot - P_mag) / n
+    # Thermodynamics
     T_3d = (P_tot - B_sq_3d / 2.0) / n_3d
-    T_3d = jnp.maximum(T_3d, 0.01) # Robust floor
-    
+    T_3d = jnp.maximum(T_3d, 0.01)
     vth = jnp.sqrt(T_3d)
 
-    # 4. Phase Space Distribution f(x, v)
+    # 4. Phase Space Distribution
     v_norm_sq = ((VX - V_x_3d)**2 + (VY - V_y_3d)**2 + (VZ - V_z_3d)**2)
     f = n_3d * jnp.exp(-v_norm_sq / (2 * vth**2)) / ((2 * jnp.pi * vth**2)**1.5)
     
