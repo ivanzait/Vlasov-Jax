@@ -4,9 +4,9 @@ import argparse
 import importlib
 import jax.numpy as jnp
 
-from vlasov_solver import HybridMaxwellSolver
-from plot_shock import plot_step_maxwell
-from init_simulation import initialize_simulation
+from .vlasov_solver import HybridMaxwellSolver
+from setup.plot_shock import plot_step_maxwell
+from .init_simulation import initialize_simulation
 
 
 if __name__ == "__main__":

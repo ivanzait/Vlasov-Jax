@@ -2,6 +2,8 @@ import jax
 import jax.numpy as jnp
 from jax import jit
 from functools import partial
+from .state import SimulationState
+from . import boundary
 
 @partial(jit, static_argnums=(2, 3))
 def get_gradient(arr, dx, bc_left='periodic', bc_right='periodic'):

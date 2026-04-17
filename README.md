@@ -27,19 +27,23 @@
 
 The codebase is modularized to decouple physics logic from numerical infrastructure:
 
-### 1. Hybrid Vlasov-Maxwell Solver
-*   [`simulator.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/simulator.py): Main entry point for simulations.
-*   [`init_simulation.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/init_simulation.py): Centralized setup for physical parameters and grid verification.
-*   [`vlasov_solver.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/vlasov_solver.py): Implementation of the high-level Strang-split orchestrator.
-*   [`field_solver.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/field_solver.py): Functional Maxwell/Faraday/Moment kernels.
-*   [`boundary.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/boundary.py): Ghost cell synchronization and BC enforcement.
-*   [`state.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/state.py): Core JAX Pytree data structure (`SimulationState`).
-*   [`init_shock.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/init_shock.py): Initial Condition generator for shock physics.
+### 1. Hybrid Vlasov-Maxwell Solver (`src/solver/`)
+*   [`simulator.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/src/solver/simulator.py): Main module entry point.
+*   [`vlasov_solver.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/src/solver/vlasov_solver.py): High-level Strang-split orchestrator.
+*   [`init_simulation.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/src/solver/init_simulation.py): Parameters and grid verification.
+*   [`field_solver.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/src/solver/field_solver.py): Functional Maxwell/Faraday kernels.
+*   [`boundary.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/src/solver/boundary.py): Ghost cell synchronization.
+*   [`state.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/src/solver/state.py): JAX Pytree data structure (`SimulationState`).
 
-### 2. Neural Correction (ML)
-*   [`ml_dataset.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/ml_dataset.py): High-fidelity downsampling ($64^3 \rightarrow 32^3$) and enriched multi-field feature engineering.
-*   [`ml_models.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/ml_models.py): Deep 3-layer MLP architecture with **Physics-Weighted Loss** (Moment consistency).
-*   [`train_offline.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/train_offline.py): Supervised learning engine for training log-space residuals ($\Delta \log f$).
+### 2. Neural Correction (`src/ml/`)
+*   [`ml_dataset.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/src/ml/ml_dataset.py): Purified, metadata-aware dataset engine.
+*   [`ml_models.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/src/ml/ml_models.py): Dynamized 3-layer MLP architecture.
+*   [`train_offline.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/src/ml/train_offline.py): Physics-weighted training pipeline.
+*   [`ml_quantification.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/src/ml/ml_quantification.py): Performance scorecard.
+
+### 3. Setup & Utils (`setup/`)
+*   [`init_shock.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/setup/init_shock.py): Shock tube IC generator.
+*   [`plot_shock.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/setup/plot_shock.py): Spatial visualization suite.
 
 ---
 
@@ -78,15 +82,19 @@ Simulation data is stored in **`.npz`** format for broad compatibility. Each fil
 
 ### Running a Hybrid Shock Simulation
 ```bash
-python3 simulator.py --config config_coarse
+./run_simulation.sh config_fine
 ```
 
 ### Performing Offline Training (Neural Correction)
 ```bash
-# Generate Fine/Coarse data, then train the MLP
-python3 train_offline.py
+./run_training.sh
 ```
-*Trained weights are persistent in `ml_weights/`.*
+
+### Verifying ML Performance
+```bash
+./run_verification.sh
+```
+*Trained weights are persistent in `data/ml_weights/`.*
 
 ---
 

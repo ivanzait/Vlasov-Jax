@@ -1,9 +1,9 @@
 import os
 import jax.numpy as jnp
-from vlasov_solver import HybridMaxwellSolver
-from plot_shock import plot_step_maxwell, plot_initial_verification
-from init_shock import setup_shock_hybrid
-from state import SimulationState
+from .vlasov_solver import HybridMaxwellSolver
+from setup.plot_shock import plot_step_maxwell, plot_initial_verification
+from setup.init_shock import setup_shock_hybrid
+from .state import SimulationState
 
 # ==========================================
 # HYBRID (ION/ALFVENIC) NORMALIZATION

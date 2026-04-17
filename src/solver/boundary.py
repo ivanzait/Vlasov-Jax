@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 from jax import jit
 from functools import partial
-from state import SimulationState
+from .state import SimulationState
 
 @partial(jit, static_argnums=(6,))
 def apply_bc(f, B_y, B_z, E_x, E_y, E_z, bc_x, static_data=None):

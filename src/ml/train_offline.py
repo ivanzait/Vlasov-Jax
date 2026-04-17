@@ -5,8 +5,8 @@ import time
 import os
 import pickle
 
-from ml_dataset import EnrichedDataset
-from ml_models import MLP, update_physics, physics_loss_fn
+from .ml_dataset import EnrichedDataset
+from .ml_models import MLP, update_physics, physics_loss_fn
 
 def main():
     # 1. Configuration (Phase 4 Final Refinement)
@@ -68,12 +68,12 @@ def main():
             print(f"Epoch {epoch:03d}: Total Loss = {train_loss:.6f} | Val Loss = {val_loss:.6f} | Time = {epoch_time:.2f}s")
             
     # 5. Save Final Artifacts
-    os.makedirs('ml_weights', exist_ok=True)
-    weight_path = 'ml_weights/mlp_final_phys.pkl'
+    os.makedirs('data/ml_weights', exist_ok=True)
+    weight_path = 'data/ml_weights/mlp_final_phys.pkl'
     with open(weight_path, 'wb') as f:
         pickle.dump(params, f)
     
-    test_path = 'ml_weights/test_data_split.pkl'
+    test_path = 'data/ml_weights/test_data_split.pkl'
     with open(test_path, 'wb') as f:
         pickle.dump({'inputs': test_set[0], 'labels': test_set[1], 'v': v, 'dv': dv}, f)
         

@@ -3,9 +3,9 @@ import jax.numpy as jnp
 from jax import jit
 from functools import partial
 
-from state import SimulationState
-import field_solver
-import boundary
+from .state import SimulationState
+from . import field_solver
+from . import boundary
 
 @partial(jit, static_argnums=(3, 4))
 def remap_1d_axis0(f, disp, dx, bc_left='periodic', bc_right='periodic'):

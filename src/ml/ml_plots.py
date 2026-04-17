@@ -40,7 +40,7 @@ def load_full_snapshot_and_predict(step, params, coarse_dir='data/coarse', epsil
 
 def create_4row_verification_plot(step=50):
     # 1. Load Weights
-    weight_path = 'ml_weights/mlp_final_phys.pkl'
+    weight_path = 'data/ml_weights/mlp_final_phys.pkl'
     if not os.path.exists(weight_path):
         print("Error: Weights not found.")
         return

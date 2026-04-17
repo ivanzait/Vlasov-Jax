@@ -7,8 +7,8 @@ from ml_models import MLP, get_n_v_from_f
 
 def quantify_ml_improvement():
     # 1. Load weights and test data
-    weight_path = 'ml_weights/mlp_final_phys.pkl'
-    test_path = 'ml_weights/test_data_split.pkl'
+    weight_path = 'data/ml_weights/mlp_final_phys.pkl'
+    test_path = 'data/ml_weights/test_data_split.pkl'
     
     if not os.path.exists(weight_path) or not os.path.exists(test_path):
         print("Error: Training results not found. Please run train_offline.py first.")
