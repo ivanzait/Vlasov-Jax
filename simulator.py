@@ -64,7 +64,7 @@ if __name__ == "__main__":
     save_path = os.path.join(cfg.DATA_DIR, "step_0000.npz")
     jnp.savez(save_path, f=f_phys, B_x=Bx_phys, B_y=By_phys, B_z=Bz_phys, 
               E_x=solver.get_physical(state.E_x), E_y=solver.get_physical(state.E_y), E_z=solver.get_physical(state.E_z), 
-              x=x_phys, v=v, dx=dx, dv=dv)
+              x=x_phys, v=v, dx=dx, dv=dv, dt=dt)
     
     
     t_start = time.time()
@@ -103,7 +103,7 @@ if __name__ == "__main__":
             jnp.savez(save_path, f=solver.get_physical(state.f), 
                       B_x=solver.get_physical(state.B_x), B_y=solver.get_physical(state.B_y), B_z=solver.get_physical(state.B_z), 
                       E_x=solver.get_physical(state.E_x), E_y=solver.get_physical(state.E_y), E_z=solver.get_physical(state.E_z), 
-                      x=x_phys, v=v, dx=dx, dv=dv)
+                      x=x_phys, v=v, dx=dx, dv=dv, dt=dt)
     
 
     # ------------------------------------------

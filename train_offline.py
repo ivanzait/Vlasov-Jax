@@ -11,6 +11,7 @@ from ml_models import MLP, update_physics, physics_loss_fn
 def main():
     # 1. Configuration (Phase 4 Final Refinement)
     # Architecture: 32780 -> 256 -> 256 -> 128 -> 32768
+    # V ~256^3 and E ~ 3; B ~3 ; dE ~ 3 ; dB ~ 3
     HIDDEN_DIMS = [256, 256, 128] 
     INPUT_DIM = 32780
     OUTPUT_DIM = 32768
@@ -21,11 +22,13 @@ def main():
     LAMBDA_PHYS = 5.0  # Increased from 1.0 to prioritize density/velocity matching
     V_SCALE = 4.0
     
-    v = jnp.linspace(-16, 16, 32)
-    dv = v[1] - v[0]
-    
     # 2. Setup Dataset
     dataset = EnrichedDataset(fine_dir='data/fine', coarse_dir='data/coarse')
+    
+    # Grid info for moment calculation (Synced with Coarse Data)
+    v = dataset.v
+    dv = dataset.dv
+    
     key = jax.random.PRNGKey(42)
     train_set, val_set, test_set = dataset.get_split(key, ratios=(0.6, 0.2, 0.2))
     

@@ -46,10 +46,11 @@ class MLP:
 
 def get_n_v_from_f(f_flat, v, dv):
     """
-    Calculates density and 1D velocity from a flattened 32^3 distribution.
+    Calculates density and 1D velocity from a flattened distribution,
+    dynamically deriving dimensions from the velocity grid.
     """
-    f = f_flat.reshape(-1, 32, 32, 32)
-    nv = 32
+    nv = len(v)
+    f = f_flat.reshape(-1, nv, nv, nv)
     n = jnp.sum(f, axis=(1, 2, 3)) * (dv**3)
     n_safe = jnp.maximum(n, 1e-6)
     
@@ -80,7 +81,8 @@ def physics_loss_fn(params, x, y_target_log, v, dv, lambda_phys=1.0, v_scale=4.0
     mse_log_weighted = jnp.mean(weighted_diff_sq)
     
     # 2. Physics Matching (Moment-Consistency)
-    f_coarse_flat = x[:, :32**3]
+    nv = len(v)
+    f_coarse_flat = x[:, :nv**3]
     f_pred = f_coarse_flat * jnp.exp(pred_log_residual)
     f_target = f_coarse_flat * jnp.exp(y_target_log)
     
