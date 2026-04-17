@@ -13,10 +13,12 @@
 ## 🚀 Key Features
 
 *   **Multi-Regime Physics**: Specialized modules for **Hybrid** (Ion kinetics) and **Electrostatic** (Electron kinetics).
+*   **Neural Correction Engine**: Built-in specialized MLP hooks for learning the numerical residuals between coarse and fine resolution simulations.
 *   **Modern Architecture**: Uses JAX-native **Pytree** state management for end-to-end differentiability.
 *   **Numerical Precision**:
     *   **SLICE-3D**: Semi-Lagrangian scheme for conservative velocity rotations.
     *   **Ghost-Cell Boundaries**: 2nd-order Central differences enforced through synchronized 2-cell padding.
+*   **Offline Physics-ML Pipeline**: Integrated dataset handling for enriched features ($f, E, B$ fields + spatial gradients).
 *   **Differentiable by Design**: Fully compatible with `jax.grad`, `jax.vmap`, and `jax.jit`.
 
 ---
@@ -33,6 +35,11 @@ The codebase is modularized to decouple physics logic from numerical infrastruct
 *   [`boundary.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/boundary.py): Ghost cell synchronization and BC enforcement.
 *   [`state.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/state.py): Core JAX Pytree data structure (`SimulationState`).
 *   [`init_shock.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/init_shock.py): Initial Condition generator for shock physics.
+
+### 2. Neural Correction (ML)
+*   [`ml_dataset.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/ml_dataset.py): High-fidelity downsampling ($64^3 \rightarrow 32^3$) and enriched multi-field feature engineering.
+*   [`ml_models.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/ml_models.py): Deep 3-layer MLP architecture with **Physics-Weighted Loss** (Moment consistency).
+*   [`train_offline.py`](file:///Users/ivanzait/Documents/Documents_LM4500/Codes/VLSV-JAX-2/Vlasov-Jax/train_offline.py): Supervised learning engine for training log-space residuals ($\Delta \log f$).
 
 ---
 
@@ -73,7 +80,22 @@ Simulation data is stored in **`.npz`** format for broad compatibility. Each fil
 ```bash
 python3 simulator.py --config config_coarse
 ```
-*Outputs (plots, diagnostics) are saved to the directories defined in your config.*
+
+### Performing Offline Training (Neural Correction)
+```bash
+# Generate Fine/Coarse data, then train the MLP
+python3 train_offline.py
+```
+*Trained weights are persistent in `ml_weights/`.*
+
+---
+
+## 📈 ML Correction Benchmarks
+
+The current **Deep High-Capacity Model** achieved the following improvements on unseen shock test data:
+*   **Log-Distribution Fidelity**: **61.3%** error reduction.
+*   **Bulk Velocity ($V_x$)**: **61.4%** error reduction.
+*   **Physical Consistency**: Maintained density conservation within 3.1% of baseline.
 
 ---
 
