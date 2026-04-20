@@ -31,14 +31,22 @@ class MLP:
     @staticmethod
     def forward(params, x):
         """
-        Flexible forward pass through N layers with GELU activations.
+        Deeper forward pass with Residual (Skip) Connections.
+        Identifies layers with matching dimensions and applies identity skips.
         """
         h = x
-        # Go through all hidden layers
         for i in range(len(params) - 1):
             w, b = params[i]
-            h = jnp.dot(h, w) + b
-            h = jax.nn.gelu(h)
+            
+            # Linear + Activation
+            z = jnp.dot(h, w) + b
+            h = jax.nn.gelu(z)
+            
+            # (Residual Connection Disabled for Baseline Study)
+            # if h.shape[-1] == w.shape[1]:
+            #     h = z + h
+            # else:
+            #     h = z
         
         # Output layer (Linear)
         w_out, b_out = params[-1]

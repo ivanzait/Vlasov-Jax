@@ -4,8 +4,26 @@ import pickle
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-from ml_dataset import load_simulation_data, downsample_velocity, get_gradients
-from ml_models import MLP, get_n_v_from_f
+from matplotlib.colors import LogNorm, LinearSegmentedColormap
+from .ml_dataset import load_simulation_data, downsample_velocity, get_gradients
+from .ml_models import MLP, get_n_v_from_f
+
+# Global publication-ready styling
+plt.rcParams.update({
+    'font.size': 14,
+    'axes.labelsize': 16,
+    'axes.titlesize': 18,
+    'xtick.labelsize': 14,
+    'ytick.labelsize': 14,
+    'legend.fontsize': 12,
+    'font.family': 'serif',
+    'mathtext.fontset': 'dejavuserif',
+    'axes.linewidth': 1.5
+})
+
+# 6-stop 'HyperPlasma' colormap: Dark Blue -> Purple -> Green -> Yellow -> Orange -> Red
+cmd_colors = ['#080035', '#7F00FF', '#007FFF', '#00FF00', '#FFFF00', '#FF7F00', '#FF0000']
+custom_cmap = LinearSegmentedColormap.from_list("HyperPlasma", cmd_colors, N=256)
 
 def load_full_snapshot_and_predict(step, params, coarse_dir='data/coarse', epsilon=1e-12):
     """
@@ -69,28 +87,29 @@ def create_4row_verification_plot(step=50):
     ax_n = fig.add_subplot(gs[1, :], sharex=ax_e)
     ax_v = fig.add_subplot(gs[2, :], sharex=ax_e)
     
-    ax_e.plot(x, e_f[:, 0], 'k-', label='Fine (Ex)', alpha=0.8)
-    ax_e.plot(x, e_coarse[:, 0], 'r--', label='Coarse (Ex)', alpha=0.8)
-    ax_e.set_title(f"Electric Field Ex(x) - Step {step}")
-    ax_e.set_ylabel("Ex")
+    ax_e.plot(x, e_f[:, 0], 'k-', label='Fine Reference', alpha=0.8)
+    ax_e.plot(x, e_coarse[:, 0], 'r--', label='Coarse Input', alpha=0.8)
+    ax_e.set_title(f"Electric Field Profile - Step {step}")
+    ax_e.set_ylabel(r"$E_x / (V_A B_0)$")
     ax_e.grid(True, alpha=0.3)
-    ax_e.legend()
+    ax_e.legend(frameon=True)
+    ax_e.set_xlim(x[0], x[-1])
 
-    ax_n.plot(x, n_f, 'k-', linewidth=2, label='Fine Density (n)')
+    ax_n.plot(x, n_f, 'k-', linewidth=2, label='Fine Reference')
     ax_n.plot(x, n_c, 'r--', label='Coarse Baseline')
     ax_n.plot(x, n_m, 'b-', label='ML-Improved')
-    ax_n.set_title("Density Profile n(x)")
-    ax_n.set_ylabel("n")
+    ax_n.set_title("Density Profile $n(x)$")
+    ax_n.set_ylabel(r"Density $n / n_0$")
     ax_n.grid(True, alpha=0.3)
-    ax_n.legend()
+    ax_n.legend(frameon=True)
 
-    ax_v.plot(x, vx_f, 'k-', linewidth=2, label='Fine Velocity (Vx)')
+    ax_v.plot(x, vx_f, 'k-', linewidth=2, label='Fine Reference')
     ax_v.plot(x, vx_c, 'r--', label='Coarse Baseline')
     ax_v.plot(x, vx_m, 'b-', label='ML-Improved')
-    ax_v.set_title("Velocity Profile Vx(x)")
-    ax_v.set_ylabel("Vx")
+    ax_v.set_title("Velocity Profile $V_x(x)$")
+    ax_v.set_ylabel(r"Velocity $V_x / V_A$")
     ax_v.grid(True, alpha=0.3)
-    ax_v.legend()
+    ax_v.legend(frameon=True)
 
     f_f_ps = jnp.sum(f_f, axis=(2, 3)) * (dv**2)
     f_c_ps = jnp.sum(f_coarse, axis=(2, 3)) * (dv**2)
@@ -98,14 +117,14 @@ def create_4row_verification_plot(step=50):
     
     axes_ps = [fig.add_subplot(gs[3, 0]), fig.add_subplot(gs[3, 1]), fig.add_subplot(gs[3, 2])]
     ps_data = [f_f_ps, f_c_ps, f_m_ps]
-    ps_titles = ["Fine f(x, vx)", "Coarse f(x, vx)", "ML-Improved f(x, vx)"]
+    ps_titles = ["Fine Reference", "Coarse Baseline", "ML-Improved"]
     
     from matplotlib.colors import LogNorm
     for i in range(3):
-        im = axes_ps[i].pcolormesh(x, v, ps_data[i].T, shading='auto', cmap='jet', norm=LogNorm(vmin=1e-5, vmax=1.0))
+        im = axes_ps[i].pcolormesh(x, v, ps_data[i].T, shading='auto', cmap=custom_cmap, norm=LogNorm(vmin=1e-4, vmax=0.5))
         axes_ps[i].set_title(ps_titles[i])
-        axes_ps[i].set_xlabel("x")
-        if i == 0: axes_ps[i].set_ylabel("vx")
+        axes_ps[i].set_xlabel(r"$x / d_i$")
+        if i == 0: axes_ps[i].set_ylabel(r"$V_x / V_A$")
         fig.colorbar(im, ax=axes_ps[i])
 
     plt.tight_layout()

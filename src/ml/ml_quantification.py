@@ -3,7 +3,7 @@ import jax.numpy as jnp
 import pickle
 import numpy as np
 import os
-from ml_models import MLP, get_n_v_from_f
+from .ml_models import MLP, get_n_v_from_f
 
 def quantify_ml_improvement():
     # 1. Load weights and test data

@@ -3,16 +3,15 @@ import jax.numpy as jnp
 
 # Derived from plasma_calculator.ipynb constraints
 shock_dict_normalized = {
-    'n_up': 1.0,
-    'n_down': 3.4375,
-    'B_up': jnp.array([0.70710678, 0.0, 0.70710678]),
-    'B_down': jnp.array([0.70710678, 0.0, 2.55677028]),
-    'V_up': jnp.array([-5.0365157, 0.0, 5.0365157]),
-    'V_down': jnp.array([-1.4651682, 0.0, -5.2929201]),
-    'T_up': 0.3461,
-    'T_down': 4.4555 # Derived from Momentum Conservation
+    'n_up': 0.29069767,
+    'n_down': 1.0,
+    'B_up': jnp.array([0.26655629, 0.0, 0.26655629]),
+    'B_down': jnp.array([0.26655629, 0.0, 0.96381935]),
+    'V_up': jnp.array([-1.16672594, 0.0, 1.16672594]),
+    'V_down': jnp.array([-0.33941118, 0.0, -1.2261229]),
+    'T_up': 0.3382,
+    'T_down': 4.35646874
 }
-
 
 
 

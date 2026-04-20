@@ -1,0 +1,1 @@
+python3 setup/plot_velocity_slices.py --data_dir data/coarse --step 100 --out_dir plots/v_slices

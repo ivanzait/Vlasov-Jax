@@ -2,6 +2,25 @@ import matplotlib.pyplot as plt
 import jax.numpy as jnp
 import os
 import argparse
+from matplotlib.colors import LogNorm, LinearSegmentedColormap
+
+# Global publication-ready styling
+plt.rcParams.update({
+    'font.size': 14,
+    'axes.labelsize': 16,
+    'axes.titlesize': 18,
+    'xtick.labelsize': 14,
+    'ytick.labelsize': 14,
+    'legend.fontsize': 12,
+    'font.family': 'serif',
+    'mathtext.fontset': 'dejavuserif',
+    'axes.linewidth': 1.5
+})
+
+# 6-stop 'HyperPlasma' colormap: Dark Blue -> Purple -> Green -> Yellow -> Orange -> Red
+# Designed for maximum visibility of low-density beams and high-energy tails
+cmd_colors = ['#080035', '#7F00FF', '#007FFF', '#00FF00', '#FFFF00', '#FF7F00', '#FF0000']
+custom_cmap = LinearSegmentedColormap.from_list("HyperPlasma", cmd_colors, N=256)
 
 
 def plot_step_maxwell(i, x, v, f, B_x, B_y, B_z, E_x, E_y, E_z, lx, dx, dv, save_dir="plots_maxwell"):
@@ -25,36 +44,37 @@ def plot_step_maxwell(i, x, v, f, B_x, B_y, B_z, E_x, E_y, E_z, lx, dx, dv, save
     fig, axes = plt.subplots(4, 1, figsize=(10, 14), sharex=True)
     
     # 1. B fields
-    axes[0].plot(x, B_x, label='Bx', color='black', linestyle='--')
-    axes[0].plot(x, B_y, label='By', color='blue')
-    axes[0].plot(x, B_z, label='Bz', color='red')
+    axes[0].plot(x, B_x, label='$B_x$', color='black', linestyle='--')
+    axes[0].plot(x, B_y, label='$B_y$', color='blue')
+    axes[0].plot(x, B_z, label='$B_z$', color='red')
     axes[0].set_title(f"Magnetic Fields (Step {i})")
-    axes[0].set_ylabel("B (B_0)")
-    axes[0].legend(loc="upper right")
-    axes[0].grid(True)
+    axes[0].set_ylabel(r"$B / B_0$")
+    axes[0].legend(loc="upper right", frameon=True)
+    axes[0].grid(True, alpha=0.3)
+    axes[0].set_xlim(x[0], x[-1])
     
     # 2. E fields
-    axes[1].plot(x, E_x, label='Ex', color='black', linestyle='--')
-    axes[1].plot(x, E_y, label='Ey', color='blue')
-    axes[1].plot(x, E_z, label='Ez', color='red')
+    axes[1].plot(x, E_x, label='$E_x$', color='black', linestyle='--')
+    axes[1].plot(x, E_y, label='$E_y$', color='blue')
+    axes[1].plot(x, E_z, label='$E_z$', color='red')
     axes[1].set_title("Electric Fields")
-    axes[1].set_ylabel("E (V_A B_0)")
-    axes[1].legend(loc="upper right")
-    axes[1].grid(True)
+    axes[1].set_ylabel(r"$E / (V_A B_0)$")
+    axes[1].legend(loc="upper right", frameon=True)
+    axes[1].grid(True, alpha=0.3)
     
     # 3. Density and Velocity
     ax3 = axes[2]
     # Density on left axis
-    ax3.plot(x, n_i, color='black', linestyle=':', linewidth=2.5, label='Density (n)')
-    ax3.set_ylabel("Density (n_0)")
+    ax3.plot(x, n_i, color='black', linestyle=':', linewidth=2.5, label='Density ($n$)')
+    ax3.set_ylabel(r"Density $n / n_0$")
     ax3.set_title("Ion Moments")
     
     # Velocity on right axis
     ax3_rhs = ax3.twinx()
-    ax3_rhs.plot(x, Vi_x, label='Vx', color='green', linestyle='-', linewidth=2.5)
-    ax3_rhs.plot(x, Vi_y, label='Vy', color='magenta', linestyle='-', linewidth=2.5)
-    ax3_rhs.plot(x, Vi_z, label='Vz', color='cyan', linestyle='-', linewidth=2.5)
-    ax3_rhs.set_ylabel("Velocity (V_A)")
+    ax3_rhs.plot(x, Vi_x, label='$V_x$', color='green', linestyle='-', linewidth=2.5)
+    ax3_rhs.plot(x, Vi_y, label='$V_y$', color='magenta', linestyle='-', linewidth=2.5)
+    ax3_rhs.plot(x, Vi_z, label='$V_z$', color='cyan', linestyle='-', linewidth=2.5)
+    ax3_rhs.set_ylabel(r"Velocity $V / V_A$")
     
     lines1, labels1 = ax3.get_legend_handles_labels()
     lines2, labels2 = ax3_rhs.get_legend_handles_labels()
@@ -62,10 +82,12 @@ def plot_step_maxwell(i, x, v, f, B_x, B_y, B_z, E_x, E_y, E_z, lx, dx, dv, save
     ax3.grid(True)
     
     # 4. Phase Space f(x, vx)
-    im = axes[3].pcolormesh(x, v, f_vx_x.T, shading='auto', cmap='jet')
-    axes[3].set_title("Marginal Phase Space f(x, vx)")
-    axes[3].set_xlabel("x (d_i)")
-    axes[3].set_ylabel("vx (V_A)")
+    # Using LogNorm for distribution details and the unique custom_cmap
+    im = axes[3].pcolormesh(x, v, f_vx_x.T, shading='auto', cmap=custom_cmap, norm=LogNorm(vmin=1e-4, vmax=0.5))
+    axes[3].set_title(r"Marginal Phase Space $f(x, V_x)$")
+    axes[3].set_xlabel(r"$x / d_i$")
+    axes[3].set_ylabel(r"$V_x / V_A$")
+    fig.colorbar(im, ax=axes[3], label="$f$ (log scale)")
     
     plt.tight_layout()
     plt.savefig(f"{save_dir}/step_{i:04d}.png", dpi=150)

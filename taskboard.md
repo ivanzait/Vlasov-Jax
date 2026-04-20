@@ -15,9 +15,13 @@ This board tracks the evolution of the VLSV-JAX framework from a monolithic solv
 - [x] **Offline Benchmark**: achieved **61% reduction** in distribution log-residuals and **61% reduction** in velocity MAE on unseen test data.
 - [x] **Verification Dashboard**: Specialized 4-row dashboard with log-scale Phase-Space visualization.
 
-## 🛠️ In Progress (Phase 4: Hybrid Solver Integration)
-- [ ] **Corrector Hook**: Inject the trained MLP into the `strang_step` orchestrator in `vlasov_solver.py`.
-- [ ] **Conservative Filtering**: Apply particle-mass and energy normalization to the ML output to ensure physical conservation.
+- [x] Phase 11: Downstream Normalization Pivot
+    - [x] Update physical constants in `init_shock.py` (n_down=1, B_down=1)
+    - [x] Purge legacy `data/` and `plots/` directories
+- [ ] Phase 12: New Production Baseline
+    - [ ] Run Fine-resolution ($64^3$) downstream-normalized simulation
+    - [ ] Run Coarse-resolution ($32^3$) downstream-normalized simulation
+    - [ ] Retrain Deep ResMLP on the new physically consistent dataset
 
 ## 🚀 Roadmap (Future Phases)
 - [ ] **Dataset Engine**: Automated "Fine vs Coarse" downsampling utility for generating training targets.
