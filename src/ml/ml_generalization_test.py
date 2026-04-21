@@ -7,11 +7,14 @@ import matplotlib.pyplot as plt
 from .ml_dataset import load_simulation_data, downsample_velocity, upsample_velocity, get_gradients
 from .ml_models import MLP, get_n_v_from_f
 
-def evaluate_generalization(weight_path='data/ml_weights/mlp_final_phys.pkl', test_dir='data/coarse_nv16', step=50):
+def evaluate_generalization(weight_path='data/ml_weights/mlp_final_phys.pkl', test_dir='data/coarse_nv16', step=50, config_name='baseline'):
     """
     Evaluates the trained MLP on a simulation with a DIFFERENT resolution than 32^3.
     Demonstrates the effectiveness of the Resolution Adapter for generalization.
     """
+    from .ml_configs import get_config, get_input_dim
+    exp_config = get_config(config_name)
+    
     if not os.path.exists(weight_path):
         print(f"Error: Weights not found at {weight_path}")
         return
@@ -19,9 +22,9 @@ def evaluate_generalization(weight_path='data/ml_weights/mlp_final_phys.pkl', te
     with open(weight_path, 'rb') as f:
         params = pickle.load(f)
 
-    print(f"--- Evaluating Generalization for {test_dir} (Step {step}) ---")
+    print(f"--- Evaluating Generalization ({config_name}) for {test_dir} (Step {step}) ---")
     
-    # 1. Load Data (Super-Coarse or Unseen)
+    # 1. Load Data
     data_c = load_simulation_data(test_dir, [step])
     f_coarse = data_c['f'][0]
     e_coarse = data_c['E'][0]
@@ -31,22 +34,31 @@ def evaluate_generalization(weight_path='data/ml_weights/mlp_final_phys.pkl', te
     
     coarse_nv = f_coarse.shape[-1]
     
-    # 2. Apply Resolution Adapter (Upsample to 32^3 for MLP)
-    print(f"  [Adapter] Upsampling {coarse_nv}^3 source to 32^3 canonical grid...")
+    # 2. Apply Resolution Adapter
     f_coarse_32 = upsample_velocity(f_coarse, target_nv=32)
     
-    # 3. Build Features (Using Canonical 32^3)
+    # 3. Build Features based on Config
     nx = f_coarse_32.shape[0]
-    de_dx = jnp.stack([get_gradients(e_coarse[..., i], dx) for i in range(3)], axis=-1)
-    db_dx = jnp.stack([get_gradients(b_coarse[..., i], dx) for i in range(3)], axis=-1)
+    feature_list = []
     
-    inputs = jnp.concatenate([
-        f_coarse_32.reshape(nx, -1),
-        e_coarse.reshape(nx, 3),
-        b_coarse.reshape(nx, 3),
-        de_dx.reshape(nx, 3),
-        db_dx.reshape(nx, 3)
-    ], axis=1)
+    if exp_config.get('f'):
+        feature_list.append(f_coarse_32.reshape(nx, -1))
+    
+    if exp_config.get('E'):
+        feature_list.append(e_coarse.reshape(nx, 3))
+        
+    if exp_config.get('B'):
+        feature_list.append(b_coarse.reshape(nx, 3))
+        
+    if exp_config.get('grad_E'):
+        de_dx = jnp.stack([get_gradients(e_coarse[..., i], dx) for i in range(3)], axis=-1)
+        feature_list.append(de_dx.reshape(nx, 3))
+        
+    if exp_config.get('grad_B'):
+        db_dx = jnp.stack([get_gradients(b_coarse[..., i], dx) for i in range(3)], axis=-1)
+        feature_list.append(db_dx.reshape(nx, 3))
+        
+    inputs = jnp.concatenate(feature_list, axis=1)
     
     # 4. Predict in Canonical Space
     pred_log_residuals = MLP.forward(params, inputs)

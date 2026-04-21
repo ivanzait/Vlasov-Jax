@@ -75,17 +75,22 @@ def load_simulation_data(data_dir, steps):
     }
 
 class EnrichedDataset:
-    def __init__(self, fine_dir='data/fine', coarse_dirs=['data/coarse'], steps=None, epsilon=1e-12):
+    def __init__(self, fine_dir='data/fine', coarse_dirs=['data/coarse'], steps=None, feature_config=None, epsilon=1e-12):
         """
         Initializes an enriched dataset from one or more coarse simulation sources.
-        All non-32^3 sources are automatically upsampled to the canonical 32^3 resolution.
+        feature_config: Dictionary like {'f': True, 'E': True, ...}
         """
+        if feature_config is None:
+            # Default to all features if not specified
+            feature_config = {'f': True, 'E': True, 'B': True, 'grad_E': True, 'grad_B': True}
+            
         if steps is None:
             # Probe first directory for step list
             files = [f for f in os.listdir(coarse_dirs[0]) if f.startswith('step_') and f.endswith('.npz')]
             steps = sorted([int(f[5:9]) for f in files])
         
         print(f"Loading {len(steps)} snapshots from {len(coarse_dirs)} sources...")
+        print(f"Feature Config: {feature_config}")
         
         all_inputs = []
         all_labels = []
@@ -113,24 +118,34 @@ class EnrichedDataset:
             # 3. Downsample Fine to canonical 32^3
             f_fine_down = downsample_velocity(data_f['f'], target_nv=32)
             
-            # 4. Calculate Gradients
-            de_dx = jnp.stack([get_gradients(e_coarse[..., i], dx) for i in range(3)], axis=-1)
-            db_dx = jnp.stack([get_gradients(b_coarse[..., i], dx) for i in range(3)], axis=-1)
-            
-            # 5. Target Residuals
+            # 4. Target Residuals
             labels = jnp.log(f_fine_down + epsilon) - jnp.log(f_coarse + epsilon)
             
-            # 6. Build Input Vectors for this source
+            # 5. Build Input Vectors for this source
             n_steps, nx = f_coarse.shape[:2]
             n_samples = n_steps * nx
             
-            f_flat = f_coarse.reshape(n_samples, -1)
-            e_flat = e_coarse.reshape(n_samples, 3)
-            b_flat = b_coarse.reshape(n_samples, 3)
-            de_flat = de_dx.reshape(n_samples, 3)
-            db_flat = db_dx.reshape(n_samples, 3)
+            feature_list = []
             
-            source_inputs = jnp.concatenate([f_flat, e_flat, b_flat, de_flat, db_flat], axis=1)
+            # Always include f if specified (should be)
+            if feature_config.get('f'):
+                feature_list.append(f_coarse.reshape(n_samples, -1))
+            
+            if feature_config.get('E'):
+                feature_list.append(e_coarse.reshape(n_samples, 3))
+            
+            if feature_config.get('B'):
+                feature_list.append(b_coarse.reshape(n_samples, 3))
+                
+            if feature_config.get('grad_E'):
+                de_dx = jnp.stack([get_gradients(e_coarse[..., i], dx) for i in range(3)], axis=-1)
+                feature_list.append(de_dx.reshape(n_samples, 3))
+                
+            if feature_config.get('grad_B'):
+                db_dx = jnp.stack([get_gradients(b_coarse[..., i], dx) for i in range(3)], axis=-1)
+                feature_list.append(db_dx.reshape(n_samples, 3))
+            
+            source_inputs = jnp.concatenate(feature_list, axis=1)
             source_labels = labels.reshape(n_samples, -1)
             
             all_inputs.append(source_inputs)

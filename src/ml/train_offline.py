@@ -4,31 +4,39 @@ import optax
 import time
 import os
 import pickle
+import argparse
 
 from .ml_dataset import EnrichedDataset, load_simulation_data
 from .ml_models import MLP, update_physics, physics_loss_fn
+from .ml_configs import get_config, get_input_dim
 
 def main():
-    # 1. Configuration (Phase 4 Final Refinement)
-    # Architecture: 32780 -> 256 -> 256 -> 128 -> 32768
+    parser = argparse.ArgumentParser(description="Train VLSV-JAX Neural Corrector.")
+    parser.add_argument("--config", type=str, default="baseline", help="Experiment config name (baseline, no_grad)")
+    parser.add_argument("--epochs", type=int, default=2000, help="Number of training epochs")
+    args = parser.parse_args()
+    
+    # 1. Load Configuration
+    exp_config = get_config(args.config)
+    
     HIDDEN_DIMS = [256, 256, 128] 
-    INPUT_DIM = 32780
+    INPUT_DIM = get_input_dim(exp_config)
     OUTPUT_DIM = 32768
     
     BATCH_SIZE = 8
-    LEARNING_RATE = 1e-4  # Higher LR for simpler 3-layer network
-    EPOCHS = 2000
+    LEARNING_RATE = 1e-4  
+    EPOCHS = args.epochs
     LAMBDA_PHYS = 5.0 
     V_SCALE = 4.0
     
-    # 2. Setup Dataset (Native 32^3 Benchmark)
+    # 2. Setup Dataset (Dictionary-based feature activation)
     dataset = EnrichedDataset(
         fine_dir='data/fine', 
-        coarse_dirs=['data/coarse']
+        coarse_dirs=['data/coarse'],
+        feature_config=exp_config
     )
     
     # Grid info for moment calculation (Canonical 32^3 Reference)
-    # We must use the 32^3 grid because the MLP always operates at this resolution
     data_ref = load_simulation_data('data/coarse', [0])
     v_phys = data_ref['metadata']['v']
     dv_phys = data_ref['metadata']['dv']
@@ -79,11 +87,11 @@ def main():
             
     # 5. Save Final Artifacts
     os.makedirs('data/ml_weights', exist_ok=True)
-    weight_path = 'data/ml_weights/mlp_final_phys.pkl'
+    weight_path = f'data/ml_weights/mlp_{args.config}.pkl'
     with open(weight_path, 'wb') as f:
         pickle.dump(params, f)
     
-    test_path = 'data/ml_weights/test_data_split.pkl'
+    test_path = f'data/ml_weights/test_data_{args.config}.pkl'
     with open(test_path, 'wb') as f:
         pickle.dump({'inputs': test_set[0], 'labels': test_set[1], 'v': v_phys, 'dv': dv_phys}, f)
         

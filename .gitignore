@@ -1,5 +1,5 @@
 # ignore folders
-venv/
+.venv/
 plots/
 data/
 ml_weights/

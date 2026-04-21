@@ -1,0 +1,59 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath, amssymb, amsfonts}
+\usepackage{geometry}
+\usepackage{xcolor}
+\geometry{a4paper, margin=1in}
+
+\title{Physics-Aware Loss Function for VLSV-JAX Neural Correction}
+\author{Vlasov-Jax Project Team}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+The objective of the neural corrector is to map a coarse-resolution ion distribution function $f_{coarse}(\mathbf{x}, \mathbf{v})$ to its high-fidelity counterpart $f_{fine}(\mathbf{x}, \mathbf{v})$ obtained from expensive fine-resolution simulations. To achieve this in a physically consistent manner, we utilize a multi-objective loss function that combines phase-space reconstruction accuracy with the preservation of macroscopic moments.
+
+\section{Logarithmic Residual Mapping}
+Given the high dynamic range of the distribution function (often spanning $10^{-6}$ to $0.5$), the MLP learns a logarithmic residual $\Delta \log f$:
+\begin{equation}
+    \Delta \log f(\mathbf{x}, \mathbf{v}) = \log\left( \frac{f_{fine}}{f_{coarse}} \right)
+\end{equation}
+The reconstructed distribution is then recovery via:
+\begin{equation}
+    \hat{f}_{fine} = f_{coarse} \cdot \exp\left( \text{MLP}(\mathbf{x}, \mathbf{v}; \theta) \right)
+\end{equation}
+
+\section{The Composite Loss Function}
+The total loss $\mathcal{L}_{total}$ is defined as a weighted sum of the distribution loss and the physics-consistency loss:
+\begin{equation}
+    \mathcal{L}_{total} = \mathcal{L}_{dist} + \lambda_{phys} \mathcal{L}_{phys}
+\end{equation}
+where $\lambda_{phys}$ is a hyperparameter (typically set to 5.0) that governs the strength of the conservation constraints.
+
+\subsection{Weighted Distribution Loss ($\mathcal{L}_{dist}$)}
+To capture critical sub-grid kinetic phenomena such as reflected ion beams and high-energy tails, we employ a \textbf{Weighted Mean Squared Error (WMSE)}:
+\begin{equation}
+    \mathcal{L}_{dist} = \frac{1}{N_{samples}} \sum_{i} W(\mathbf{v}_i) \cdot \left\| (\Delta \log f)_{i}^{pred} - (\Delta \log f)_{i}^{target} \right\|^2
+\end{equation}
+The weighting kernel $W(\mathbf{v})$ emphasizes the high-velocity regions of phase-space:
+\begin{equation}
+    W(\mathbf{v}) = 1.0 + \frac{\|\mathbf{v}\|^2}{v_{scale}^2}
+\end{equation}
+This formulation ensures that the model does not ignore the low-density tails in favor of the high-density thermal core.
+
+\subsection{Physics Consistency Loss ($\mathcal{L}_{phys}$)}
+A critical requirement for any kinetic solver is the conservation of macroscopic quantities. We enforce \textbf{Mass and Momentum conservation} by penalizing the discrepancy between the moments calculated from the predicted distribution and those of the fine-resolution reference:
+\begin{equation}
+    \mathcal{L}_{phys} = \|n[\hat{f}] - n[f_{fine}]\|^2 + \|\mathbf{V}[\hat{f}] - \mathbf{V}[f_{fine}]\|^2
+\end{equation}
+where the moments are calculated via numerical integration over the velocity grid:
+\begin{align}
+    n[f] &= \int f(\mathbf{v}) \, d^3\mathbf{v} \\
+    \mathbf{V}[f] &= \frac{1}{n} \int \mathbf{v} f(\mathbf{v}) \, d^3\mathbf{v}
+\end{align}
+In our JAX implementation, these integrals are computed efficiently using vectorized tensor operations, ensuring that the conservation laws are differentiable and can guide the optimization of the network weights.
+
+\end{document}
